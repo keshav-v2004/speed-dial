@@ -88,14 +88,14 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen w-full bg-neutral-900 text-white p-6">
-      <div className="max-w-5xl mx-auto">
+      <div className="w-full">
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex flex-col">
             <h1 className="text-2xl font-semibold tracking-wide">
               {now.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </h1>
-            <span className="text-lg text-gray-300 font-mono">
+            <span className="text-3xl md:text-4xl text-gray-300 font-mono mt-1">
               {now.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
           </div>
@@ -110,12 +110,12 @@ export default function HomePage() {
           onDragEnd={handleDragEnd}
         >
           <SortableContext items={order} strategy={rectSortingStrategy}>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+            <div className="flex flex-wrap justify-center gap-8 md:gap-10 items-start">
               {order.map(id => {
                 const data = getData(id);
                 if (!data) return null;
                 return (
-                  <SortableRootItem key={id} id={id} freezeTransform={false}>
+                  <SortableRootItem key={id} id={id} freezeTransform={false} className="w-28">
                     <SpeedDialCard
                       item={data as SpeedDialItem}
                       onDelete={() => handleDelete(id)}

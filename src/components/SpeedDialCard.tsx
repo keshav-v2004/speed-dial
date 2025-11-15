@@ -72,7 +72,7 @@ export default function SpeedDialCard({ item, onDelete, dragging, onEdit }: Prop
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLink(); } }}
-      className={`relative cursor-pointer select-none group outline-none focus:ring-2 focus:ring-blue-500 rounded ${dragging ? "scale-105 shadow-lg" : ""}`}
+      className={`w-28 relative cursor-pointer select-none group outline-none focus:ring-2 focus:ring-blue-500 rounded ${dragging ? "scale-105 shadow-lg" : ""}`}
       aria-label={`Open ${item.title}`}
     >
       {onDelete && (
@@ -95,7 +95,7 @@ export default function SpeedDialCard({ item, onDelete, dragging, onEdit }: Prop
           className="w-full h-full object-cover"
         />
       </div>
-      <p className="text-center mt-2 text-sm text-gray-700 group-hover:underline">
+      <p className="w-28 truncate text-center mt-2 text-sm text-gray-700 group-hover:underline">
         {item.title}
       </p>
     </div>
