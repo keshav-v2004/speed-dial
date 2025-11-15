@@ -1,9 +1,8 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useSpeedDial } from "../context/SpeedDialContext";
 import SpeedDialCard from "../components/SpeedDialCard";
 import FolderCard from "../components/FolderCard";
 import AddSiteModal from "../components/AddSiteModal";
-import AddFolderModal from "../components/modals/AddFolderModal";
 import {
   DndContext,
   PointerSensor,
@@ -19,7 +18,6 @@ import {
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy } from "@dnd-kit/sortable";
 import { SortableRootItem } from "../components/SortableItem";
-import CreateFolderDropZone, { CREATE_FOLDER_ZONE_ID } from "../components/CreateFolderDropZone";
 import type { SpeedDialItem, Folder } from "../context/SpeedDialContext";
 
 export default function HomePage() {
@@ -54,10 +52,13 @@ export default function HomePage() {
   };
 
   const [showAddSite, setShowAddSite] = useState(false);
-  const [showAddFolder, setShowAddFolder] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [activeSourceFolder, setActiveSourceFolder] = useState<string | null>(null);
   const [expandedFolderId, setExpandedFolderId] = useState<string | null>(null);
+  const [hoverFolderId, setHoverFolderId] = useState<string | null>(null);
+  const [groupTargetId, setGroupTargetId] = useState<string | null>(null);
+  const [groupReady, setGroupReady] = useState<boolean>(false);
+  const groupTimerRef = useRef<number | null>(null);
 
   if (!order || !items || !folders) {
     return <div className="text-white p-4">Loading...</div>;
@@ -92,10 +93,62 @@ export default function HomePage() {
     // detect source folder
     const sourceFolder = folders.find((f) => f.items.some((it) => it.id === active.id));
     setActiveSourceFolder(sourceFolder ? sourceFolder.id : null);
+    // reset grouping state
+    setGroupTargetId(null);
+    setGroupReady(false);
+    if (groupTimerRef.current) {
+      clearTimeout(groupTimerRef.current);
+      groupTimerRef.current = null;
+    }
   };
 
-  const handleDragOver = () => {
-    // reserved for future cross-folder hover logic
+  const handleDragOver = (event: any) => {
+    const { over } = event;
+    if (!over) {
+      setHoverFolderId(null);
+      
+      // cancel grouping timer
+      if (groupTimerRef.current) {
+        clearTimeout(groupTimerRef.current);
+        groupTimerRef.current = null;
+      }
+      setGroupTargetId(null);
+      setGroupReady(false);
+      return;
+    }
+    const overIdStr = String(over.id);
+    // If over a folder or over an item inside a folder, highlight that folder
+    const overType = getItemType(overIdStr);
+    const containing = folders.find((f) => f.items.some((it) => it.id === overIdStr));
+    const targetFolderId = overType === "folder" ? overIdStr : containing?.id || null;
+    setHoverFolderId(targetFolderId);
+    
+
+    // Determine grouping intent: active root item over another root item (different)
+    const isRootItem = (id: string) =>
+      order.includes(id) && !folders.some((f) => f.items.some((it) => it.id === id)) && getItemType(id) === "item";
+
+    if (activeId && isRootItem(String(activeId)) && isRootItem(overIdStr) && String(activeId) !== overIdStr) {
+      // start/restart dwell timer if target changed
+      if (groupTargetId !== overIdStr) {
+        setGroupReady(false);
+        setGroupTargetId(overIdStr);
+        if (groupTimerRef.current) {
+          clearTimeout(groupTimerRef.current);
+        }
+        groupTimerRef.current = window.setTimeout(() => {
+          setGroupReady(true);
+        }, 350);
+      }
+    } else {
+      // not a grouping situation
+      if (groupTimerRef.current) {
+        clearTimeout(groupTimerRef.current);
+        groupTimerRef.current = null;
+      }
+      setGroupTargetId(null);
+      setGroupReady(false);
+    }
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -103,6 +156,14 @@ export default function HomePage() {
     if (!over) {
       setActiveId(null);
       setActiveSourceFolder(null);
+      setHoverFolderId(null);
+      
+      if (groupTimerRef.current) {
+        clearTimeout(groupTimerRef.current);
+        groupTimerRef.current = null;
+      }
+      setGroupTargetId(null);
+      setGroupReady(false);
       return;
     }
     const activeIdStr = String(active.id);
@@ -113,19 +174,23 @@ export default function HomePage() {
     // Helper: if over is an item inside a folder, treat that folder as target for item moves
     const overContainingFolder = folders.find((f) => f.items.some((it) => it.id === overIdStr)) || null;
 
-    // Auto-create folder when item dropped on another root item (both in root order and not already in a folder)
-    if (
-      activeType === "item" &&
-      overType === "item" &&
-      activeIdStr !== overIdStr &&
-      order.includes(activeIdStr) &&
-      order.includes(overIdStr) &&
-      !folders.some(f => f.items.some(it => it.id === activeIdStr)) &&
-      !folders.some(f => f.items.some(it => it.id === overIdStr))
-    ) {
+    // Auto-create folder only if dwell completed on the hovered item target
+    const isRootItem = (id: string) =>
+      order.includes(id) && !folders.some((f) => f.items.some((it) => it.id === id)) && getItemType(id) === "item";
+    const groupingActive =
+      groupReady && groupTargetId === overIdStr && isRootItem(activeIdStr) && isRootItem(overIdStr) && activeIdStr !== overIdStr;
+    if (groupingActive) {
       groupItemsIntoFolder([activeIdStr, overIdStr]);
       setActiveId(null);
       setActiveSourceFolder(null);
+      setHoverFolderId(null);
+      
+      if (groupTimerRef.current) {
+        clearTimeout(groupTimerRef.current);
+        groupTimerRef.current = null;
+      }
+      setGroupTargetId(null);
+      setGroupReady(false);
       return;
     }
 
@@ -138,6 +203,14 @@ export default function HomePage() {
       setOrder(arrayMove(order, oldIndex, newIndex));
       setActiveId(null);
       setActiveSourceFolder(null);
+      setHoverFolderId(null);
+      
+      if (groupTimerRef.current) {
+        clearTimeout(groupTimerRef.current);
+        groupTimerRef.current = null;
+      }
+      setGroupTargetId(null);
+      setGroupReady(false);
       return;
     }
 
@@ -172,6 +245,7 @@ export default function HomePage() {
           reorderFolderItems(folder.id, newIds);
           setActiveId(null);
           setActiveSourceFolder(null);
+          setHoverFolderId(null);
           return;
         }
       }
@@ -192,25 +266,12 @@ export default function HomePage() {
       }
       setActiveId(null);
       setActiveSourceFolder(null);
+      setHoverFolderId(null);
       return;
     }
 
     // Dropped item from folder to empty root area (not over root element id) -> append
     if (activeSourceFolder && activeType === "item" && !overInRoot && !order.includes(activeIdStr)) {
-          // Drop on create-folder zone to create new folder with single item
-          if (overIdStr === CREATE_FOLDER_ZONE_ID && activeType === "item") {
-            // If item inside folder remove first
-            if (activeSourceFolder) {
-              removeItemFromFolder(activeSourceFolder, activeIdStr);
-            } else if (order.includes(activeIdStr)) {
-              // remove from order, will be grouped
-              setOrder(order.filter(id => id !== activeIdStr));
-            }
-            groupItemsIntoFolder([activeIdStr]);
-            setActiveId(null);
-            setActiveSourceFolder(null);
-            return;
-          }
       const folderId = activeSourceFolder;
       const oldFolder = folders.find((f) => f.id === folderId);
       const draggedItem = oldFolder?.items.find((it) => it.id === activeIdStr);
@@ -220,11 +281,21 @@ export default function HomePage() {
       }
       setActiveId(null);
       setActiveSourceFolder(null);
+      setHoverFolderId(null);
+      
       return;
     }
 
     setActiveId(null);
     setActiveSourceFolder(null);
+    setHoverFolderId(null);
+    
+    if (groupTimerRef.current) {
+      clearTimeout(groupTimerRef.current);
+      groupTimerRef.current = null;
+    }
+    setGroupTargetId(null);
+    setGroupReady(false);
   };
 
   const handleDelete = (id: string) => {
@@ -243,22 +314,6 @@ export default function HomePage() {
         {/* HEADER */}
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Speed Dial</h1>
-
-          <div className="flex gap-4">
-            <button
-              onClick={() => setShowAddSite(true)}
-              className="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700"
-            >
-              Add Site
-            </button>
-
-            <button
-              onClick={() => setShowAddFolder(true)}
-              className="px-4 py-2 bg-green-600 rounded-lg hover:bg-green-700"
-            >
-              Add Folder
-            </button>
-          </div>
         </div>
 
         {/* GRID with dnd-kit */}
@@ -276,8 +331,13 @@ export default function HomePage() {
                 const data = getData(id);
                 if (!data) return null;
                 const isItem = type === "item";
+                const groupingActive =
+                  groupReady && groupTargetId !== null && activeId !== null &&
+                  getItemType(String(activeId)) === 'item' && getItemType(String(groupTargetId)) === 'item' &&
+                  order.includes(String(activeId)) && order.includes(String(groupTargetId)) &&
+                  String(activeId) !== String(groupTargetId);
                 return (
-                  <SortableRootItem key={id} id={id}>
+                  <SortableRootItem key={id} id={id} freezeTransform={groupingActive}>
                     {isItem ? (
                       <SpeedDialCard
                         item={data as SpeedDialItem}
@@ -292,14 +352,21 @@ export default function HomePage() {
                         disableInnerSorting={activeId !== null && order.includes(activeId) && !activeSourceFolder}
                         expanded={expandedFolderId === id}
                         onToggle={(fid) => setExpandedFolderId(expandedFolderId === fid ? null : fid)}
-                        highlight={activeId !== null && activeId !== id && order.includes(activeId)}
+                        highlight={hoverFolderId === id}
                       />
                     )}
                   </SortableRootItem>
                 );
               })}
-              {/* Create Folder Drop Zone */}
-              <CreateFolderDropZone active={activeId !== null} />
+              {/* Add Site Tile (fixed at end, not sortable) */}
+              <button
+                type="button"
+                onClick={() => setShowAddSite(true)}
+                className="h-28 w-28 rounded-xl border-2 border-dashed border-gray-400 text-gray-600 flex items-center justify-center hover:border-blue-500 hover:text-blue-600 transition select-none"
+                aria-label="Add site"
+              >
+                + Add Site
+              </button>
             </div>
           </SortableContext>
           <DragOverlay>
@@ -327,12 +394,6 @@ export default function HomePage() {
           onAdd={(url, image, title) =>
             addItem({ id: crypto.randomUUID(), url, image, title: title || url })
           }
-        />
-      )}
-      {showAddFolder && (
-        <AddFolderModal
-          isOpen={showAddFolder}
-          onClose={() => setShowAddFolder(false)}
         />
       )}
     </div>
