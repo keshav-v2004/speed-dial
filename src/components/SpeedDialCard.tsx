@@ -95,7 +95,7 @@ export default function SpeedDialCard({ item, onDelete, dragging, onEdit }: Prop
           className="w-full h-full object-cover"
         />
       </div>
-      <p className="w-28 truncate text-center mt-2 text-sm text-gray-700 group-hover:underline">
+      <p className="w-28 truncate text-center mt-2 text-sm text-gray-200 group-hover:underline">
         {item.title}
       </p>
     </div>
