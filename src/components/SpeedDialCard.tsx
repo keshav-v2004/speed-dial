@@ -1,12 +1,17 @@
+import { useRef } from "react";
 import type { SpeedDialItem } from "../context/SpeedDialContext";
 
 interface Props {
   item: SpeedDialItem;
   onDelete?: () => void;
   dragging?: boolean;
+  onEdit?: () => void;
 }
 
-export default function SpeedDialCard({ item, onDelete, dragging }: Props) {
+export default function SpeedDialCard({ item, onDelete, dragging, onEdit }: Props) {
+  const pressTimerRef = useRef<number | null>(null);
+  const longPressedRef = useRef<boolean>(false);
+
   const openLink = () => {
     if (!item.url) return;
     try {
@@ -16,9 +21,54 @@ export default function SpeedDialCard({ item, onDelete, dragging }: Props) {
       // swallow
     }
   };
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!onEdit) return;
+    e.preventDefault();
+    e.stopPropagation();
+    onEdit();
+  };
+
+  const clearTimer = () => {
+    if (pressTimerRef.current) {
+      clearTimeout(pressTimerRef.current);
+      pressTimerRef.current = null;
+    }
+  };
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    longPressedRef.current = false;
+    if (!onEdit) return;
+    // Only consider touch/pen for long-press; right-click handled by contextmenu
+    if (e.pointerType === 'mouse') return;
+    clearTimer();
+    pressTimerRef.current = window.setTimeout(() => {
+      longPressedRef.current = true;
+      onEdit();
+    }, 600);
+  };
+
+  const onPointerUp = () => {
+    clearTimer();
+  };
+
+  const onPointerCancel = () => {
+    clearTimer();
+  };
+
   return (
     <div
-      onClick={openLink}
+      onClick={(e) => {
+        if (longPressedRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        openLink();
+      }}
+      onContextMenu={handleContextMenu}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLink(); } }}

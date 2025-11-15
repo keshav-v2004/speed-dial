@@ -3,7 +3,11 @@ import { useState, useRef, useEffect } from "react";
 interface Props {
   isOpen: boolean;
   onClose: () => void;
-  onAdd: (url: string, image: string, title: string) => void;
+  onAdd?: (url: string, image: string, title: string) => void;
+  onSave?: (url: string, image: string, title: string) => void;
+  initial?: { url?: string; title?: string; image?: string };
+  submitLabel?: string;
+  titleLabel?: string;
 }
 
 function normalizeUrl(raw: string): string {
@@ -26,11 +30,11 @@ function faviconFor(url: string): string {
   }
 }
 
-export default function AddSiteModal({ isOpen, onClose, onAdd }: Props) {
-  const [url, setUrl] = useState("");
-  const [title, setTitle] = useState("");
-  const [image, setImage] = useState<string | null>(null);
-  const [autoIcon, setAutoIcon] = useState<string>("");
+export default function AddSiteModal({ isOpen, onClose, onAdd, onSave, initial, submitLabel, titleLabel }: Props) {
+  const [url, setUrl] = useState(initial?.url ?? "");
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [image, setImage] = useState<string | null>(initial?.image ?? null);
+  const [autoIcon, setAutoIcon] = useState<string>(initial?.url ? faviconFor(initial.url) : "");
   const [error, setError] = useState<string>("");
   const fileRef = useRef<HTMLInputElement | null>(null);
 
@@ -39,6 +43,17 @@ export default function AddSiteModal({ isOpen, onClose, onAdd }: Props) {
       setAutoIcon(faviconFor(url));
     }
   }, [url, image]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setUrl(initial?.url ?? "");
+      setTitle(initial?.title ?? "");
+      setImage(initial?.image ?? null);
+      setAutoIcon(initial?.url ? faviconFor(initial.url) : "");
+      setError("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -77,18 +92,21 @@ export default function AddSiteModal({ isOpen, onClose, onAdd }: Props) {
       return;
     }
     const finalImage = image || autoIcon || faviconFor(normalized) || "";
-    onAdd(normalized, finalImage, title.trim() || normalized);
+    const handler = onSave ?? onAdd;
+    if (handler) {
+      handler(normalized, finalImage, title.trim() || normalized);
+    }
     onClose();
-    setUrl("");
-    setTitle("");
-    setImage(null);
-    setAutoIcon("");
+    setUrl(initial?.url ?? "");
+    setTitle(initial?.title ?? "");
+    setImage(initial?.image ?? null);
+    setAutoIcon(initial?.url ? faviconFor(initial.url ?? "") : "");
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onPaste={handlePaste}>
       <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-xl shadow-xl p-6">
-        <h2 className="text-xl font-bold mb-4">Add Website</h2>
+        <h2 className="text-xl font-bold mb-4">{titleLabel ?? (onSave ? "Edit Website" : "Add Website")}</h2>
         <label className="block text-xs font-medium mb-1">URL</label>
         <input
           type="url"
@@ -146,7 +164,7 @@ export default function AddSiteModal({ isOpen, onClose, onAdd }: Props) {
             onClick={submit}
             className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
             disabled={!url.trim()}
-          >Add</button>
+          >{submitLabel ?? (onSave ? "Save" : "Add")}</button>
         </div>
       </div>
     </div>

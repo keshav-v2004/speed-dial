@@ -25,16 +25,4 @@ export function SortableRootItem({ id, children, className, disabled, freezeTran
   );
 }
 
-export function SortableFolderItem({ id, children, className, disabled, freezeTransform }: SortableItemProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled });
-  const style: React.CSSProperties = {
-    transform: freezeTransform && !isDragging ? undefined : CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
-  return (
-    <div ref={setNodeRef} style={style} className={className} {...attributes} {...listeners}>
-      {children}
-    </div>
-  );
-}
+// SortableFolderItem removed (folders no longer supported)
