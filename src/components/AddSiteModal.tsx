@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 interface Props {
   isOpen: boolean;
@@ -6,60 +6,148 @@ interface Props {
   onAdd: (url: string, image: string, title: string) => void;
 }
 
+function normalizeUrl(raw: string): string {
+  if (!raw) return "";
+  try {
+    const prefixed = /^(https?:)?\/\//i.test(raw) ? raw : `https://${raw}`;
+    const u = new URL(prefixed);
+    return u.toString();
+  } catch {
+    return raw; // let validation handle later
+  }
+}
+
+function faviconFor(url: string): string {
+  try {
+    const u = new URL(normalizeUrl(url));
+    return `https://www.google.com/s2/favicons?domain=${u.hostname}&sz=128`;
+  } catch {
+    return "";
+  }
+}
+
 export default function AddSiteModal({ isOpen, onClose, onAdd }: Props) {
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
-  const [image, setImage] = useState("");
+  const [image, setImage] = useState<string | null>(null);
+  const [autoIcon, setAutoIcon] = useState<string>("");
+  const [error, setError] = useState<string>("");
+  const fileRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!image && url) {
+      setAutoIcon(faviconFor(url));
+    }
+  }, [url, image]);
 
   if (!isOpen) return null;
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = () => setImage(reader.result as string);
     reader.readAsDataURL(file);
   };
 
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
+    for (const item of e.clipboardData.items) {
+      if (item.type.startsWith("image")) {
+        const file = item.getAsFile();
+        if (!file) continue;
+        const reader = new FileReader();
+        reader.onload = () => setImage(reader.result as string);
+        reader.readAsDataURL(file);
+        break;
+      }
+    }
+  };
+
+  const submit = () => {
+    setError("");
+    const normalized = normalizeUrl(url.trim());
+    if (!normalized) {
+      setError("Valid URL required");
+      return;
+    }
+    try {
+      new URL(normalized);
+    } catch {
+      setError("Invalid URL format");
+      return;
+    }
+    const finalImage = image || autoIcon || faviconFor(normalized) || "";
+    onAdd(normalized, finalImage, title.trim() || normalized);
+    onClose();
+    setUrl("");
+    setTitle("");
+    setImage(null);
+    setAutoIcon("");
+  };
+
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center">
-      <div className="bg-white p-6 rounded-2xl w-96 shadow-xl">
+    <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4" onPaste={handlePaste}>
+      <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-xl shadow-xl p-6">
         <h2 className="text-xl font-bold mb-4">Add Website</h2>
-
+        <label className="block text-xs font-medium mb-1">URL</label>
         <input
-          type="text"
-          placeholder="Site Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="w-full p-2 border rounded mb-3"
-        />
-
-        <input
-          type="text"
+          type="url"
           placeholder="https://example.com"
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          className="w-full p-2 border rounded mb-3"
+          className="w-full p-2 border rounded mb-3 dark:bg-gray-700"
         />
-
-        <input type="file" onChange={handleImageUpload} className="mb-3" />
-
-        <button
-          onClick={() => {
-            if (url && image) {
-              onAdd(url, image, title || url);
-              onClose();
-            }
-          }}
-          className="w-full bg-blue-600 text-white py-2 rounded-lg"
-        >
-          Add
-        </button>
-
-        <button onClick={onClose} className="w-full mt-2 text-gray-600">
-          Cancel
-        </button>
+        <label className="block text-xs font-medium mb-1">Title (optional)</label>
+        <input
+          type="text"
+          placeholder="Site title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          className="w-full p-2 border rounded mb-4 dark:bg-gray-700"
+        />
+        <div className="mb-4">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center border">
+              {image || autoIcon ? (
+                <img src={image || autoIcon} alt="preview" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-[10px] text-gray-500 text-center px-1">No image</span>
+              )}
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="px-3 py-1 text-sm bg-blue-600 text-white rounded"
+              >Select Image</button>
+              {image && (
+                <button
+                  type="button"
+                  onClick={() => setImage(null)}
+                  className="px-3 py-1 text-xs bg-gray-200 rounded"
+                >Remove Image</button>
+              )}
+            </div>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageUpload}
+            className="hidden"
+          />
+          <p className="mt-2 text-xs text-gray-500">Paste an image or we will try a favicon automatically.</p>
+        </div>
+        {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
+        <div className="flex justify-end gap-3">
+          <button type="button" onClick={onClose} className="px-4 py-2 text-sm">Cancel</button>
+          <button
+            type="button"
+            onClick={submit}
+            className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50"
+            disabled={!url.trim()}
+          >Add</button>
+        </div>
       </div>
     </div>
   );
