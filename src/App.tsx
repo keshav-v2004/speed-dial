@@ -1,14 +1,11 @@
 import { useDashboardStore } from "./hooks/useDashboardStore";
 
-function App() {
-  const store = useDashboardStore();
-
+export default function App() {
   return (
-    <div className="text-white p-5">
-      <h1 className="text-xl font-bold">Speed Dial Dashboard</h1>
-      <pre>{JSON.stringify(store.state, null, 2)}</pre>
-    </div>
+    <h1 className="text-4xl font-bold text-blue-600">
+      Tailwind is working!
+    </h1>
   );
 }
 
-export default App;
+
